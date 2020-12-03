@@ -1,0 +1,41 @@
+# Keep
+!*.xml
+!*.FCStd
+!*.dsphdata
+# References
+*.bib  
+# Models
+*.stl
+# DualSPHysics - For simulation
+DualSPHysics_v5.0/
+DualSPHysics_v5.0/*
+*.out
+*.csv
+*.vtk
+*.bi4
+*.ibi4
+*.obi4
+# Paraview - For Visualisation
+Paraview/
+Paraview/*
+# Media
+*.png
+*.jpg
+Media/
+Media/Animations/
+Media/Diagrams/
+Media/Reference/
+Media/Renders/
+Media/Screenshots
+# Documents
+*.pptx
+*.pdf
+*.xlsx
+# Latex
+*.dvi
+*.clo
+*.cls
+*.tex
+*.eps
+*.sty
+*.bst
