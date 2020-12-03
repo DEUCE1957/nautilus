@@ -7,8 +7,6 @@
 # Models
 *.stl
 # DualSPHysics - For simulation
-DualSPHysics_v5.0/
-DualSPHysics_v5.0/*
 *.out
 *.csv
 *.vtk
@@ -16,17 +14,9 @@ DualSPHysics_v5.0/*
 *.ibi4
 *.obi4
 # Paraview - For Visualisation
-Paraview/
-Paraview/*
 # Media
 *.png
 *.jpg
-Media/
-Media/Animations/
-Media/Diagrams/
-Media/Reference/
-Media/Renders/
-Media/Screenshots
 # Documents
 *.pptx
 *.pdf
