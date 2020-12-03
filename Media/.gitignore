@@ -1,4 +1,8 @@
-# Ignore everything in this directory
 *
 # Except this file
+!Animations/
+!Diagrams/
+!Reference/
+!Renders/
+!Screenshots/
 !.gitignore
