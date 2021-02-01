@@ -1,4 +1,9 @@
-# Ignore everything in this directory
-*
+.vscode/
+.vscode/*
+Measurements/
+Measurements/*
+*.pyc
+*.log
+*.xml
 # Except this file
 !.gitignore
