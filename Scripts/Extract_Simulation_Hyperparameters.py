@@ -16,10 +16,17 @@ case_def = [f for f in case_path.glob("*.xml") if case_path.name in f.name][0]
 with open(case_def, 'r') as file:
     xml = [line.strip("\n") for line in file.readlines() if not line.startswith("<!--")]
 print("\n".join(xml[0:5] + 
-     [".".center(len(max(xml[0:5], key=len))) for i in range(3)] + [xml[-1]]))  
+     [".".center(len(max(xml[0:5], key=len))) for i in range(3)] + [xml[-1], ""]))  
 root = ET.fromstring("\n".join(xml))
-print(f">> {C.BOLD}{C.RED}{root.tag.capitalize()}{C.END} <<")
-print(f"{', '.join([f'{C.BOLD}{str(k).capitalize()}{C.END}: {v}' for k,v in root.attrib.items()])}")
-# print(root.attrib)
-for child in root:
-    print(f"\t{C.BOLD}{child.tag}{C.TAG} :: {child.attrib}")
+
+def walk_tree(root, depth=0):
+    if depth == 0:
+        print(f">> {C.BOLD}{C.RED}{root.tag}{C.END} <<")
+        print(depth * "    " + f"{', '.join([f'{C.BOLD}{str(k).capitalize()}{C.END}: {v}' for k,v in root.attrib.items()])}")
+    for child in root:
+        print((depth+1)*"    " + f"{C.BOLD}{C.PURPLE if len(child) else C.DARKCYAN}{child.tag}{C.END} :: ", end="")
+        for k, v in child.attrib.items():
+            print(f"{k}: {v}; ", end="")
+        print("")
+        walk_tree(child, depth=depth+1)
+walk_tree(root)
