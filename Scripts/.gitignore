@@ -2,8 +2,11 @@
 .vscode/*
 Measurements/
 Measurements/*
+Real_Data/
+Real_Data/*
 *.pyc
 *.log
 *.xml
+*.txt
 # Except this file
 !.gitignore
