@@ -23,6 +23,15 @@ root = parser.close()
 tree = ElementTree(element=root)
 print([item for item in tree.iterfind("constantsdef")])
 
+def is_number(s):
+    """ Returns True is string is a number. """
+    try:
+        float(s)
+        return True
+    except ValueError:
+        return False
+
+
 def prompt(k,v):
     
     return True if resp == "" else False
@@ -31,6 +40,7 @@ def print_tree(root, parent_path=".", record=False, depth=0):
     if depth == 0:
         print(f">> {C.BOLD}{C.RED}{root.tag}{C.END} <<")
         print(depth * "    " + f"{', '.join([f'{C.BOLD}{str(k).capitalize()}{C.END}: {v}' for k,v in root.attrib.items()])}")
+    skip = True
     for child in root:
         print((depth+1)*"    " + f"{C.BOLD}{C.PURPLE if len(child) else C.DARKCYAN}{child.tag}{C.END} :: ", end="")
         if record:
@@ -39,12 +49,15 @@ def print_tree(root, parent_path=".", record=False, depth=0):
         for i, (k, v) in enumerate(child.attrib.items()):
             print(f"{k}: {v}; ", end="")
             with open(Path(__file__).parent / "HyperParameter_Contract.txt", "a+") as f:
-                if record and skip and k not in ["comment", "units_comment"]:
-                    if child.get("comment") and i == 0: print(child.get("comment"))
-                    if (resp := input("Keep this key?")) == "":
-                        if i == 0: f.write(f"{parent_path}/{child.tag}::")
-                        f.write(f"{k};")
-                if i == len(child.attrib.keys()) - 1: f.write("\n")
+                written = False
+                if record and skip:
+                    if i == 0: f.write(f"{parent_path}/{child.tag}::")
+                    if is_number(v):
+                        if child.get("comment") and i == 0: print(child.get("comment"))
+                        if (resp := input("Keep this key?")) == "":
+                            written = True
+                            f.write(f"{k}->{v};" if child.tag != "parameter" else f"{k}->{v}({child.get('key', 'name')});")
+                    if (i == len(child.attrib.keys()) - 1) and written: f.write("\n")
         print("")
         print_tree(child, parent_path=f"{parent_path}/{child.tag}", record=record and skip, depth=depth+1)
 
@@ -78,10 +91,10 @@ class SimParam(object):
     def __str__(self):
         return f"Tag: '{self.tag}' ({type(self.tag)}), Value: {self.value} ({type(self.value)}), Key: {self.key} ({type(self.key)})"
 
-print("\n TREE BEFORE SWAP")
-print_tree(tree.getroot(), record=False)     
-test_param = SimParam("velocity", 2.0, key="v")
-print("Result:", search_tree(tree.getroot(), "velocity"))
-swap_params(tree, [test_param])
-print("\n\n TREE AFTER SWAP")
-print_tree(tree.getroot(), record=False)
+# print("\n TREE BEFORE SWAP")
+print_tree(tree.getroot(), record=True)     
+# test_param = SimParam("velocity", 2.0, key="v")
+# print("Result:", search_tree(tree.getroot(), "velocity"))
+# swap_params(tree, [test_param])
+# print("\n\n TREE AFTER SWAP")
+# print_tree(tree.getroot(), record=False)

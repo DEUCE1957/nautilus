@@ -1,6 +1,9 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 from pathlib import Path
+
+# Sampling Frequency: 120hz
+
 data_dir = Path(__file__).parent / "Real_Data"
 dfs = {}
 for file in data_dir.glob("*.txt"):
