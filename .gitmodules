@@ -1,0 +1,3 @@
+[submodule "BayesianOptimization"]
+	path = BayesianOptimization
+	url = https://github.com/DEUCE1957/BayesianOptimization.git
