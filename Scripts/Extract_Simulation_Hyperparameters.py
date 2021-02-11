@@ -1,6 +1,8 @@
 from xml.etree.ElementTree import ElementTree, XMLParser, TreeBuilder
+from collections import OrderedDict
 from pathlib import Path
 from Color import Color as C
+import re, numpy as np
 
 cases_dir = Path(__file__).parent.parent / "Cases"
 case_names = {i: f.name for i, f in enumerate(cases_dir.glob("*")) if f.is_dir()}
@@ -30,11 +32,6 @@ def is_number(s):
         return True
     except ValueError:
         return False
-
-
-def prompt(k,v):
-    
-    return True if resp == "" else False
     
 def print_tree(root, parent_path=".", record=False, depth=0):
     if depth == 0:
@@ -71,30 +68,84 @@ def search_tree(root, tag, res=[]):
             break
     return res
 
-def swap_params(tree, SimParams):
-    for SimParam in SimParams:
-        print(SimParam)
-        elements = search_tree(tree.getroot(), SimParam.tag)
-        print("ELEMENTS", elements)
-        for element in elements:
-            print(f"ELEMENT: {element.tag} :: {element.attrib}")
-            if element.get(SimParam.key) is not None:
-                print(f"SET {SimParam.key} to {SimParam.value} (was {element.get(SimParam.key)})")
-                element.set(SimParam.key, SimParam.value)
-                
+
+# def swap_params(tree, SimParams):
+#     for SimParam in SimParams:
+#         print(SimParam)
+#         elements = search_tree(tree.getroot(), SimParam.tag)
+#         print("ELEMENTS", elements)
+#         for element in elements:
+#             print(f"ELEMENT: {element.tag} :: {element.attrib}")
+#             if element.get(SimParam.key) is not None:
+#                 print(f"SET {SimParam.key} to {SimParam.value} (was {element.get(SimParam.key)})")
+#                 element.set(SimParam.key, SimParam.value)
+
+def swap_params(root, params):
+    for param, v in params.items():
+        nodes = root.findall(param.id)
+        if nodes == []: raise KeyError(f"XML id: '{param.id}' not found in Tree")
+        if param.sec_key:
+            for node in nodes:
+                if node.get(param.sec_key[0]) == param.sec_key[1]:
+                    break
+        elif len(nodes) >= param.count + 1:
+            node = nodes[param.count]
+        else:
+            raise KeyError(f"Full key: ({param}) is not unique")
+        
+        if node.get(param.attr) is not None:
+            node.set(param.attr, v)
+        else:
+            raise KeyError(f"Attribute {param.attr} not in node with id: {param.id}")
+
 class SimParam(object):
-    def __init__(self, tag, value, key="value"):
-        self.tag = tag
-        self.value = value
-        self.key = key
+    """
+    id (str): Tag or XML Path (XPath) of element(s) in tree
+    attr (str): Name of element's attribute that is to be modified
+    sec_key (2-tuple): Key-Value pair that acts as secondary (attribute-value) key
+        Default: None
+    count (int): If multiple elements with this id exist, distinguish between them (in order)
+        Default: 0
+    """
+    def __init__(self, id, attr, count=0, sec_key=None):
+        self.id = id
+        self.attr = attr
+        self.count = count
+        self.sec_key = sec_key
+
+    def __hash__(self):
+        return hash((self.id, self.attr, self.count, self.sec_key))
+
+    def __eq__(self, other):
+        return (self.id, self.attr, self.count, self.sec_key) == (other.id, other.attr, other.count, other.sec_key)
+
+    def __ne__(self, other):
+        return not(self == other)
 
     def __str__(self):
-        return f"Tag: '{self.tag}' ({type(self.tag)}), Value: {self.value} ({type(self.value)}), Key: {self.key} ({type(self.key)})"
+        return (f"ID: '{self.id}', Attribute: {self.attr}, " + 
+               f"Count: {self.count}, Secondary Key (Optional): {self.sec_key}")
 
-# print("\n TREE BEFORE SWAP")
-print_tree(tree.getroot(), record=True)     
-# test_param = SimParam("velocity", 2.0, key="v")
-# print("Result:", search_tree(tree.getroot(), "velocity"))
-# swap_params(tree, [test_param])
-# print("\n\n TREE AFTER SWAP")
-# print_tree(tree.getroot(), record=False)
+print_tree(tree.getroot(), record=False)     
+
+params, param_vector = OrderedDict(), []
+with open(Path(__file__).parent / "HyperParameter_Contract-ContinuousOnly.txt", "r") as f:
+    for line in f.readlines():
+        xpath, *mappings = re.split("::|;|->|\((.+)\)", line.strip())
+        mappings = [elt for elt in mappings if elt not in [None, '']]
+        sec_key = ("key", mappings[-1]) if len(mappings) % 2 != 0 else None
+        for i in range(len(mappings) // 2):
+            count, attr, value = 0, mappings[i], mappings[i+1]
+            param = SimParam(xpath, attr=attr, count=count, sec_key=sec_key)
+            while params.get(param) is not None:
+                count += 1
+                param = SimParam(xpath, attr=attr, count=count, sec_key=sec_key)
+            params[param] = 99999 # v
+            param_vector.append(float(value))
+
+print("\n".join([f"Simulation Parameter ({param}):  {v}" for param, v in params.items()]))
+print(param_vector)
+
+swap_params(tree, params)
+print("\n\n TREE AFTER SWAP")
+print_tree(tree.getroot(), record=False)
