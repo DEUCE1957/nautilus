@@ -54,9 +54,9 @@ def print_tree(root, parent_path=".", record=False, depth=0):
             skip = True if resp == "" else False # Ensures contract is only overwritten if desired. 
         for i, (k, v) in enumerate(child.attrib.items()):
             print(f"{k}: {v}; ", end="") # Attributes are concatenated to previous string 
-            with open(Path(__file__).parent / "HyperParameter_Contract.txt", "a+") as f:
-                written = False
-                if record and skip:
+            written = False
+            if record and skip:
+                with open(Path(__file__).parent / "Hyperparameters" / "HyperParameter_Contract.txt", "a+") as f:
                     if i == 0: f.write(f"{parent_path}/{child.tag}::")
                     if is_number(v):
                         if child.get("comment") and i == 0: print(child.get("comment"))
