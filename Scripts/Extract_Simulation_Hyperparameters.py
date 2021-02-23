@@ -15,8 +15,8 @@ if str(script_path) not in sys.path:
 from XML_Tools import (SimParam, print_tree, swap_params)
 
 # >> Identify Experiment by Datetime <<
-timestamp = datetime.now().strftime("%d_%m_%Y_%Hh_%Mm")
-print(f"{C.BLUE}Timestamp{C.END}: {timestamp}")
+DEFAULT_TIMESTAMP = datetime.now().strftime("%d_%m_%Y_%Hh_%Mm")
+print(f"{C.BLUE}Timestamp{C.END}: {DEFAULT_TIMESTAMP}")
 
 # >> Select Case <<
 def select_case():
@@ -46,22 +46,24 @@ def parse_case(case_path):
     tree = ElementTree(element=root)
     return case_def, tree 
 
-def find_simulation_parameters(tree, file="HyperParameter_Contract-ContinuousOnly.txt",
+def find_simulation_parameters(tree, file,
                                swap=True, record=False, verbose=False):
     print_tree(tree.getroot(), record=record) # Record Parameters to TXT File
 
     params, param_vector = OrderedDict(), []
     with open(Path(__file__).parent / "Hyperparameters" / file, "r") as f:
         for line in f.readlines():
-            xpath, *mappings = re.split("::|;|->|\((.+)\)", line.strip())
+            xpath, *mappings = re.split("::|;|->|\[(.+)\]|\((.+)\)", line.strip())
             mappings = [elt for elt in mappings if elt not in [None, '']]
-            sec_key = ("key", mappings[-1]) if len(mappings) % 2 != 0 else None
+            # To Do: Fix/Simplify Extraction
+            sec_key = ("key", mappings[-1]) if len(mappings) % 2 != 0 else None 
+
             for i in range(len(mappings) // 2):
                 count, attr, value = 0, mappings[i], mappings[i+1]
                 param = SimParam(xpath, attr=attr, count=count, sec_key=sec_key)
                 while params.get(param) is not None:
                     count += 1
-                    param = SimParam(xpath, attr=attr, count=count, sec_key=sec_key)
+                    param.count = count
                 params[param] = str(value)
                 param_vector.append(float(value))
     if verbose:
@@ -73,7 +75,7 @@ def find_simulation_parameters(tree, file="HyperParameter_Contract-ContinuousOnl
 
 def set_duration_and_freq(tree, duration=None, freq=1.0/120.0):
     DurationNode = SimParam(id="./execution/parameters/parameter", attr="value", count=0, sec_key=("key", "TimeMax"))
-    TimeStepNode = SimParam(id="./execution/parameters/parameter", attr="value", count=0, sec_key=("key", "TimeOut"))# "#DtMin"))
+    TimeStepNode = SimParam(id="./execution/parameters/parameter", attr="value", count=0, sec_key=("key", "TimeOut"))
     swap_params(tree, OrderedDict([(DurationNode, duration if duration else input("Duration in seconds")),
                                    (TimeStepNode, str(round(freq, 15)))])) # 120 Hz
 
@@ -88,7 +90,7 @@ def update_case_file(tree, case_def, case_name, verbose=True):
         print_tree(tree.getroot(), record=False)
     
 # >> Run Simulation (slow) <<
-def run_simulation(case_def, case_name, copy_measurements=True):
+def run_simulation(case_def, case_name, timestamp=DEFAULT_TIMESTAMP, copy_measurements=True):
     batch_path = str(case_def.parent / (case_name + "_win64_GPU.bat"))
     print(f"Running Batch script: {batch_path}")
     p = Popen(batch_path, cwd=str(case_def.parent))
@@ -98,7 +100,7 @@ def run_simulation(case_def, case_name, copy_measurements=True):
     if copy_measurements:
         # >> Store MeasureTool output in this workspace <<
         copytree(case_def.parent / (case_name + "_out") / "measurements",
-                Path(__file__).parent / "Measurements" / (case_name + "_" + timestamp))
+                Path(__file__).parent / "Measurements" / (case_name + "_" + DEFAULT_TIMESTAMP))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='>> Manually Swap Simulation Hyperparameters <<')
@@ -108,7 +110,7 @@ if __name__ == "__main__":
 
     case_path, case_name = select_case()
     case_def, tree = parse_case(case_path)
-    params, param_vector = find_simulation_parameters(tree, file="HyperParameter_Contract-ContinuousOnly.txt",
+    params, param_vector = find_simulation_parameters(tree, file="HyperParameter_Contract.txt",
                                                       swap=True, record=False, verbose=False)
     swap_params(tree.getroot(), params)
     set_duration_and_freq(tree, duration=args.duration, freq=1.0/120.0)

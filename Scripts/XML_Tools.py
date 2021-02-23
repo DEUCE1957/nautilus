@@ -1,3 +1,4 @@
+import re
 from xml.etree.ElementTree import ElementTree, XMLParser, TreeBuilder
 from Color import Color as C
 from pathlib import Path
@@ -7,11 +8,11 @@ class SimParam(object):
     id (str): Tag or XML Path (XPath) of element(s) in tree
     attr (str): Name of element's attribute that is to be modified
     sec_key (2-tuple): Key-Value pair that acts as secondary (attribute-value) key
-        Default: None
+        Default: (None, None)
     count (int): If multiple elements with this id exist, distinguish between them (in order)
         Default: 0
     """
-    def __init__(self, id, attr, count=0, sec_key=None):
+    def __init__(self, id, attr, count=0, sec_key=(None, None)):
         self.id = id
         self.attr = attr
         self.count = count
@@ -30,10 +31,14 @@ class SimParam(object):
         return (f"ID: '{self.id}', Attribute: {self.attr}, " + 
                f"Count: {self.count}, Secondary Key (Optional): {self.sec_key}")
 
+    def __repr__(self):
+        return f"{self.id}::{self.attr}::{self.count}::{self.bounds[0]};;{self.bounds[1]}::{self.sec_key[0]};;{self.sec_key[1]}" # Not directly executable for security
+
 def is_number(s):
     """ Returns True if string is a number. """
     try: float(s); return True
     except ValueError: return False
+
 
 def print_tree(root, parent_path=".", record=False, depth=0):
     """"Recursively print tree (left to right). 
@@ -57,14 +62,22 @@ def print_tree(root, parent_path=".", record=False, depth=0):
             written = False
             if record and skip:
                 with open(Path(__file__).parent / "Hyperparameters" / "HyperParameter_Contract.txt", "a+") as f:
-                    if i == 0: f.write(f"{parent_path}/{child.tag}::")
                     if is_number(v):
                         if child.get("comment") and i == 0: print(child.get("comment"))
+
                         if (resp := input("Keep this key?")) == "":
                             written = True
-                            f.write(f"{k}->{v};" if child.tag != "parameter" else f"{k}->{v}({child.get('key', 'name')});")
-                    if (i == len(child.attrib.keys()) - 1) and written:
-                        f.write("\n")
+                            
+                            if i == 0:
+                                f.write(f"{parent_path}/{child.tag}::")
+
+                            if child.tag != "parameter":
+                                f.write(f"{k}->{v}[]")
+                            else:
+                                f.write(f"{k}->{v}[{child.get('key', 'name')}]")
+
+                            if i == len(child.attrib.keys()) - 1: 
+                                f.write("\n")
         print("") # Newline for new child node
         print_tree(child, parent_path=f"{parent_path}/{child.tag}",
                    record=record and skip, depth=depth+1)
@@ -82,6 +95,8 @@ def search_tree(root, tag, res=[]):
             res = new_match
             break
     return res
+
+
 
 def swap_params(root, params):
     """Swaps list of Simulation parameters in tree, using full XML paths.
