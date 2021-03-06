@@ -97,8 +97,8 @@ def update_case_file(tree, case_def, case_name, verbose=True):
         print_tree(tree.getroot(), record=False)
     
 # >> Run Simulation (slow) <<
-def run_simulation(case_def, case_name, timestamp=DEFAULT_TIMESTAMP, copy_measurements=True):
-    batch_path = str(case_def.parent / (case_name + "_win64_GPU.bat"))
+def run_simulation(case_def, case_name, os="win64", timestamp=DEFAULT_TIMESTAMP, copy_measurements=True):
+    batch_path = str(case_def.parent / (case_name + f"_{os}_GPU.bat"))
     print(f"Running Batch script: {batch_path}")
     p = Popen(batch_path, cwd=str(case_def.parent))
     stdout, stderr = p.communicate(input=b"\n") # Will print to stdout, input ensures program exits
