@@ -6,6 +6,8 @@
 *.bib  
 # Models
 *.stl
+*.blend
+*.blend1
 # DualSPHysics - For simulation
 *.out
 *.csv

@@ -12,7 +12,7 @@ script_path = base_path / "Scripts"
 if str(script_path) not in sys.path:
     sys.path.append(str(script_path))
 
-from XML_Tools import (SimParam, print_tree, swap_params)
+from XML_Tools import (HyperParameters, SimParam, print_tree, swap_params)
 
 # >> Identify Experiment by Datetime <<
 DEFAULT_TIMESTAMP = datetime.now().strftime("%d_%m_%Y_%Hh_%Mm")
@@ -46,26 +46,30 @@ def parse_case(case_path):
     tree = ElementTree(element=root)
     return case_def, tree 
 
-def find_simulation_parameters(tree, file,
+def find_simulation_parameters(tree, file_name=None,
                                swap=True, record=False, verbose=False):
     print_tree(tree.getroot(), record=record) # Record Parameters to TXT File
 
-    params, param_vector = OrderedDict(), []
-    with open(Path(__file__).parent / "Hyperparameters" / file, "r") as f:
+    params, param_vector = HyperParameters(), []
+    hyperparam_dir = Path(__file__).parent / "Hyperparameters"
+    if file is None:
+        file_names = {i: f.name for i, f in enumerate(hyperparam_dir.glob("*.txt"))}
+        print("\n".join([f"{i}: {file_names[i]}" for i in range(len(file_names)) if i in file_names]))
+        while (resp := input("Please select a Case by number")):
+            if resp.isdigit():
+                if int(resp) in file_names:
+                    file_name = file_names[int(resp)]
+                    break
+    with open(hyperparam_dir / file_name, "r") as f:
         for line in f.readlines():
-            xpath, *mappings = re.split("::|;|->|\[(.+)\]|\((.+)\)", line.strip())
-            mappings = [elt for elt in mappings if elt not in [None, '']]
-            # To Do: Fix/Simplify Extraction
-            sec_key = ("key", mappings[-1]) if len(mappings) % 2 != 0 else None 
-
-            for i in range(len(mappings) // 2):
-                count, attr, value = 0, mappings[i], mappings[i+1]
-                param = SimParam(xpath, attr=attr, count=count, sec_key=sec_key)
-                while params.get(param) is not None:
-                    count += 1
-                    param.count = count
-                params[param] = str(value)
-                param_vector.append(float(value))
+            param_str, value = line.strip().split("=>")
+           
+            param = SimParam.from_slug(param_str) 
+            while params.get(param) is not None: # ToDo: Check if this works
+                count += 1
+                param.count = count
+            params.append(param, param.type(value))
+            param_vector.append(param.type(value)) # Note: List may contain multiple different types!
     if verbose:
         print("\n".join([f"Simulation Parameter ({param}):  {v}" for param, v in params.items()]))
         print(param_vector)
@@ -74,10 +78,13 @@ def find_simulation_parameters(tree, file,
     return params, param_vector
 
 def set_duration_and_freq(tree, duration=None, freq=1.0/120.0):
-    DurationNode = SimParam(id="./execution/parameters/parameter", attr="value", count=0, sec_key=("key", "TimeMax"))
-    TimeStepNode = SimParam(id="./execution/parameters/parameter", attr="value", count=0, sec_key=("key", "TimeOut"))
-    swap_params(tree, OrderedDict([(DurationNode, duration if duration else input("Duration in seconds")),
-                                   (TimeStepNode, str(round(freq, 15)))])) # 120 Hz
+    DurationNode = SimParam(id="./execution/parameters/parameter", attr="value", count=0,
+                            default=duration if duration else input("Duration in seconds"),
+                            bound=np.float32, sec_key=("key", "TimeMax"))
+    TimeStepNode = SimParam(id="./execution/parameters/parameter", attr="value", count=0,
+                            default=str(round(freq, 15)), # 120 Hz
+                            bound=np.float32, sec_key=("key", "TimeOut"))
+    swap_params(tree, HyperParameters(DurationNode, TimeStepNode, use_defaults=True)) # 120 Hz
 
 def update_case_file(tree, case_def, case_name, verbose=True):
     # >> Create backup of Case Definition file <<
@@ -110,9 +117,9 @@ if __name__ == "__main__":
 
     case_path, case_name = select_case()
     case_def, tree = parse_case(case_path)
-    params, param_vector = find_simulation_parameters(tree, file="HyperParameter_Contract.txt",
+    params, param_vector = find_simulation_parameters(tree, file="HyperParameter_Contract-VelocityOnly.txt",
                                                       swap=True, record=False, verbose=False)
     swap_params(tree.getroot(), params)
     set_duration_and_freq(tree, duration=args.duration, freq=1.0/120.0)
     update_case_file(tree, case_def, case_name, verbose=True)
-    run_simulation(case_def, case_name, copy_measurements=True)
+    # run_simulation(case_def, case_name, copy_measurements=True)
