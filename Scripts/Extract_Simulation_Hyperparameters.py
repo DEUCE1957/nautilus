@@ -107,7 +107,7 @@ def run_simulation(case_def, case_name, os="win64", timestamp=DEFAULT_TIMESTAMP,
     if copy_measurements:
         # >> Store MeasureTool output in this workspace <<
         copytree(case_def.parent / (case_name + "_out") / "measurements",
-                Path(__file__).parent / "Measurements" / (case_name + "_" + DEFAULT_TIMESTAMP))
+                Path(__file__).parent / "Measurements" / (case_name + "_" + timestamp))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='>> Manually Swap Simulation Hyperparameters <<')

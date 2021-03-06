@@ -32,9 +32,9 @@ def extract_points(file, verbose=True):
         measure_reader = csv.reader(csvfile, delimiter=";")
         point_list = [float(point) for point in measure_reader.__next__()[2:]]
         points = {i: (point_list[3*i:3*i+3]) for i in range(len(point_list) // 3)}
+        columns = measure_reader.__next__()
         if verbose:
-            print("Points: ", points)
-            columns = measure_reader.__next__()
+            print("Points: ", points)            
             width = len(max(columns, key = lambda k: len(k)))
             print(" ".join([col.center(width) for col in columns]))
             for i, row in enumerate(measure_reader):
@@ -58,13 +58,13 @@ def match_real_and_simulated(file, points, columns):
 
     dfs_real = {}
     for point in points.values():
-        loc = int(point[0]-4)
-        dfs_real[loc] = pd.read_csv(script_path / "Real_Data" / f"Data-Downstream{loc}m-Depth{1}m-Middle.txt",
+        loc = int(point[0])
+        dfs_real[loc] = pd.read_csv(script_path / "Real_Data" / f"Data-Upstream{loc}m-Depth{1}m-Middle.txt",
                                     sep="\s", header=0)
     data = {"Time": [], "Vel_X_Sim": [], "Vel_X_Real": [], "X": [], "Y": [], "Z": []}
     for point_no in range(len(points)):
         point = points[point_no]
-        loc = int(point[0]-4)
+        loc = int(point[0])
         t, vel_sim = df_simul[columns[1]], df_simul[f"Vel_{point_no}.x [m/s]"]
         vel_real = dfs_real[loc]["Velocity_x"][0:len(vel_sim)]
         data["Time"].extend(t); data["Vel_X_Sim"].extend(vel_sim); data["Vel_X_Real"].extend(vel_real)
