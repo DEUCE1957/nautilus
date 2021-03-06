@@ -88,6 +88,13 @@ optimizer = BayesianOptimization(
 
 #  Init_points: How many steps of **random** exploration you want to perform.
 #  n_iter: How many steps of bayesian optimization you want to perform.
-optimizer.maximize(init_points=2, n_iter=5)
+optimizer.maximize(init_points=5,
+                 n_iter=25,
+                 acq='ucb', # UCB: Upper Confidence Bound, EI: Expected Improvement, # POI: Probability of Improvement 
+                 kappa=2.576, # Higher: Favours least explored spaces
+                 kappa_decay=1, # Kappa is multiplied by this every iteration
+                 kappa_decay_delay=0, # Wait before starting with decay
+                 xi=0.0 # Unused
+                 )
 
 print(optimizer.max)
