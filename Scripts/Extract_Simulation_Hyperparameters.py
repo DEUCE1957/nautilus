@@ -51,8 +51,8 @@ def find_simulation_parameters(tree, file_name=None,
     print_tree(tree.getroot(), record=record) # Record Parameters to TXT File
 
     params, param_vector = HyperParameters(), []
-    hyperparam_dir = Path(__file__).parent / "Hyperparameters"
-    if file is None:
+    hyperparam_dir = Path(__file__).parent / "HyperParameters"
+    if file_name is None:
         file_names = {i: f.name for i, f in enumerate(hyperparam_dir.glob("*.txt"))}
         print("\n".join([f"{i}: {file_names[i]}" for i in range(len(file_names)) if i in file_names]))
         while (resp := input("Please select a Case by number")):
@@ -98,9 +98,9 @@ def update_case_file(tree, case_def, case_name, verbose=True):
     
 # >> Run Simulation (slow) <<
 def run_simulation(case_def, case_name, os="win64", timestamp=DEFAULT_TIMESTAMP, copy_measurements=True):
-    batch_path = str(case_def.parent / (case_name + f"_{os}_GPU.bat"))
+    batch_path = str(case_def.parent / (case_name + f"_{os}_GPU" + (".bat" if os == "win64" else ".sh")))
     print(f"Running Batch script: {batch_path}")
-    p = Popen(batch_path, cwd=str(case_def.parent))
+    p = Popen(("" if  os=="win64" else "sudo ") + batch_path, shell=False if os=="win64" else True, cwd=str(case_def.parent))
     stdout, stderr = p.communicate(input=b"\n") # Will print to stdout, input ensures program exits
     print(f"{C.GREEN}{C.BOLD}Simulation Complete{C.END}")
 
@@ -117,9 +117,10 @@ if __name__ == "__main__":
 
     case_path, case_name = select_case()
     case_def, tree = parse_case(case_path)
-    params, param_vector = find_simulation_parameters(tree, file="HyperParameter_Contract-VelocityOnly.txt",
+    params, param_vector = find_simulation_parameters(tree, file_name="HyperParameter_Contract-VelocityOnly.txt",
                                                       swap=True, record=False, verbose=False)
     swap_params(tree.getroot(), params)
     set_duration_and_freq(tree, duration=args.duration, freq=1.0/120.0)
     update_case_file(tree, case_def, case_name, verbose=True)
-    # run_simulation(case_def, case_name, copy_measurements=True)
+    run_simulation(case_def, case_name, os="linux64", copy_measurements=True)
+
