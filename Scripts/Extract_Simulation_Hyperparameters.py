@@ -72,7 +72,6 @@ def find_simulation_parameters(tree, file_name=None,
             param_vector.append(param.type(value)) # Note: List may contain multiple different types!
     if verbose:
         print("\n".join([f"Simulation Parameter ({param}):  {v}" for param, v in params.items()]))
-        print(param_vector)
     if swap: # Swap parameters InPlace (does not update CaseFile itself yet)
         swap_params(tree, params)
     return params, param_vector

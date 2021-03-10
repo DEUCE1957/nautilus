@@ -13,6 +13,7 @@ from bayes_opt import BayesianOptimization, SequentialDomainReductionTransformer
 from bayes_opt.logger import JSONLogger # Log progress
 from bayes_opt.util import load_logs # Allow pause/start
 from bayes_opt.event import Events # Subscription to Optimisation events
+from sklearn.gaussian_process.kernels import Matern
 from Measurements_Visualisation import choose_run_and_metric, extract_points, match_real_and_simulated
 from Extract_Simulation_Hyperparameters import *
 from XML_Tools import SimParam, HyperParameters
@@ -54,13 +55,15 @@ def sim_real_difference(file, points, method="mad", delay=0, batch=0):
     return 1.0 / average_distance # Inverted as we want to minimise the objective
 
 def objective(**kwargs):
-    global BATCH_NO, DELAY, REAL_DURATION, RUN_TIMES
+    global BATCH_NO, DELAY, REAL_DURATION, OS, RUN_TIMES
     # >> Convert Kwargs to Simulation Parameters <<
     params = HyperParameters()
     for SimParamStr, value in kwargs.items(): # Kwargs are ORDERED, see PEP 468
         param = SimParam.from_slug(SimParamStr)
-        params[param] = str(value) # String ensures it is serialisable
-
+        if param.type in [np.float, np.float16, np.float32, np.float64, np.double, np.longdouble]: # Continuous
+            params[param] = str(value) # String ensures it is serialisable
+        else:
+            params[param] = str(param.type(value)) # Cast to discrete parameter
     swap_params(case.tree.getroot(), params)
     set_duration_and_freq(case.tree, duration=REAL_DURATION, freq=1.0/120.0) # Should be fixed
     update_case_file(case.tree, case.case_def, case.case_name, verbose=False)
@@ -68,7 +71,7 @@ def objective(**kwargs):
 
     timestamp = datetime.now().strftime("%d_%m_%Y_%Hh_%Mm_%Ss")
     # >> Run the simulation (warning: SLOW) <<
-    duration = run_simulation(case.case_def, case.case_name, os="linux64", timestamp=timestamp, copy_measurements=True, verbose=False)
+    duration = run_simulation(case.case_def, case.case_name, os=OS, timestamp=timestamp, copy_measurements=True, verbose=False)
     RUN_TIMES.append(duration)
 
     measure_dir = Path(__file__).parent / "Measurements" / (case.case_name + "_" + timestamp)
@@ -80,10 +83,10 @@ def objective(**kwargs):
     BATCH_NO = BATCH_NO + 1
     return target
 
-def select_log(optimizer, log_dir)
-    file_names = {i: f.name for i, f in enumerate(hyperparam_dir.glob("*.json"))}
-    if len(file_names < 1):
-        print("No previous sessions exist")
+def select_log(optimizer, log_dir):
+    file_names = {i: f.name for i, f in enumerate(log_dir.glob("*.json"))}
+    if len(file_names) < 1:
+        print(f"{C.RED}{C.BOLD}Warning{C.END}: No previous sessions exist")
         return optimizer
     print("\n".join([f"{i}: {file_names[i]}" for i in range(len(file_names)) if i in file_names]))
     while (resp := input("Please select a previous session's log by number")):
@@ -92,19 +95,20 @@ def select_log(optimizer, log_dir)
                 file_name = file_names[int(resp)]
                 break
     load_logs(optimizer, logs=[str(log_dir / file_name)])
-    print(f"Optimizer is now aware of {len(optimizer.space)} points.")  
+    print(f"{C.CYAN}{C.BOLD}INFO{C.END}: Optimizer is now aware of {len(optimizer.space)} points.")  
     return optimizer
 
+OS = "win64"
 SESSION_ID = datetime.now().strftime("%d_%m_%Y_%Hh_%Mm_%Ss")
-REAL_DURATION = 15.0 # In Seconds
-DELAY = 600 # In Time Steps (~120 steps per second)
+REAL_DURATION = 0.1 # In Seconds
+DELAY = 1 # In Time Steps (~120 steps per second)
 if (DELAY / 120.0) > REAL_DURATION:
     raise ValueError("Delay too large relative to the simulation duration")
 RUN_TIMES = []
 BATCH_NO = 0 # Real data batch index to compare simulated data to
 case = CaseInfo()
 
-params, _ = find_simulation_parameters(case.tree, file_name="HyperParameter_Contract.txt",
+params, _ = find_simulation_parameters(case.tree, file_name=None,
                                                   swap=False, record=False, verbose=False)
 
 # Use panning and zooming on initial bounds to encourage faster convergence
@@ -119,9 +123,9 @@ optimizer = BayesianOptimization(
 )
 
 # >> Logging / Pausing <<
-log_path = script_path / "Logs" / + f"{SESSION_ID}_OPTIMIZATION_LOG.json"
-if not log_path.exists():
-    log_path.mkdir()
+log_path = script_path / "Logs" / f"{SESSION_ID}_OPTIMIZATION_LOG.json"
+if not log_path.parent.exists():
+    log_path.parent.mkdir()
 logger = JSONLogger(path=str(log_path))
 optimizer.subscribe(Events.OPTIMIZATION_STEP, logger)
 
@@ -132,15 +136,19 @@ if resp.strip().lower() == "y":
 
 #  Init_points: How many steps of **random** exploration you want to perform.
 #  n_iter: How many steps of bayesian optimization you want to perform.
-optimizer.maximize(init_points=5,
-                 n_iter=15,
-                 acq='ucb', # UCB: Upper Confidence Bound, EI: Expected Improvement, # POI: Probability of Improvement 
-                 kappa=2.576, # Higher: Favours least explored spaces
-                 kappa_decay=1, # Kappa is multiplied by this every iteration
-                 kappa_decay_delay=0, # Wait before starting with decay
-                 xi=0.0 # Unused
-                 )
+optimizer.maximize(init_points=max(5 - len(optimizer.space), 0), # If previous session already explored space, don't do it again
+            n_iter=15,
+            acq='ucb', # UCB: Upper Confidence Bound, EI: Expected Improvement, # POI: Probability of Improvement 
+            kappa=2.576, # High: Prefer Exploration, Low: Prefer Exploitation
+            kappa_decay=1, # Kappa is multiplied by this every iteration
+            kappa_decay_delay=0, # Wait before starting with decay
+            xi=0.0, # Used by EI and POI, 0.1=Exploration, 0.0=Exploitation
+            # Parameters for internal Gaussian Process Regressor:
+            kernel=Matern(nu=2.5), #  [Default: Mattern 2.5 kernel]. Specific to problem. Recommended not to change.
+            alpha=1e-3, # [Default 1e-6] Controls how much noise GP can handle, increase for discrete parameters. 
+            normalize_y=True, # [{]Default: True] Normalise mean 0 variance 1, recommended for unit-normalized priors
+            n_restarts_optimizer=5, # [Default: 5] Used to optimize kernel hyperparameters!
+)
 
-print(optimizer.max)
-with open("Optimisation_Results.txt", "w+") as f:
-    f.write(str(optimizer.max))
+print(f"{C.BOLD}Run Times (HH:MM:SS){C.END}:\n", "\n".join([f"Iter {i}: {rt}" for i, rt in enumerate(RUN_TIMES)]))
+print(f"{C.BOLD}{C.PURPLE}Max of Optimized Combinations{C.END}:\n{optimizer.max}")

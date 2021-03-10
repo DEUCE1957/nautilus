@@ -31,3 +31,6 @@
 *.eps
 *.sty
 *.bst
+# Logs
+*.json
+*.txt

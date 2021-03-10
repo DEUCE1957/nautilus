@@ -116,8 +116,7 @@ class SimParam(object):
 
         if len(bound) == 2 if type(bound) in [tuple, list] else False: # I.e. only check length if it is a tuple/list
             bounds = (bound[0], bound[1])
-            bound = type(bound[0])  
-            print(bounds, bound)    
+            bound = type(bound[0])     
         elif type_lookup[bound] in ["int", "uint"]: # Is integer
             info = np.iinfo(bound)
             bounds = (bound(info.min), bound(info.max))
