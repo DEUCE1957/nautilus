@@ -4,7 +4,7 @@ from collections import OrderedDict
 from pathlib import Path
 from shutil import copyfile, copytree, rmtree
 from Color import Color as C
-from subprocess import Popen, PIPE
+from subprocess import Popen, PIPE, DEVNULL
 from datetime import datetime
 
 base_path = Path(__file__).parent.parent
@@ -97,14 +97,20 @@ def update_case_file(tree, case_def, case_name, verbose=True):
         print_tree(tree.getroot(), record=False)
     
 # >> Run Simulation (slow) <<
-def run_simulation(case_def, case_name, os="win64", timestamp=DEFAULT_TIMESTAMP, copy_measurements=True):
+def run_simulation(case_def, case_name, os="win64", timestamp=DEFAULT_TIMESTAMP, copy_measurements=True, verbose=True):
     batch_path = str(case_def.parent / (case_name + f"_{os}_GPU" + (".bat" if os == "win64" else ".sh")))
-    print(f"Running Batch script: {batch_path}")
-    p = Popen(("" if  os=="win64" else "sudo ") + batch_path, shell=False if os=="win64" else True, stdin=PIPE, cwd=str(case_def.parent))
+    if verbose:
+        print(f"Running Batch script: {batch_path}")
+        start_time = datetime.now()
+    p = Popen(("" if  os=="win64" else "sudo ") + batch_path, shell=False if os=="win64" else True, 
+                stdin=PIPE,
+                stdout=DEVNULL, # Don't print output of Script
+                cwd=str(case_def.parent))
     if Path(case_def.parent / f"{case_name}_out").exists():
         stdout, stderr = p.communicate(input=b"1") # Deletes existing '_out'
     # stdout, stderr = p.communicate(input=b"A") # Will print to stdout, input ensures program exits
-    print(f"{C.GREEN}{C.BOLD}Simulation Complete{C.END}")
+    if verbose:
+        print(f"{C.GREEN}{C.BOLD}Simulation Complete{C.END} in {datetime.now()-start_time} (HH:MM:SS)")
 
     if copy_measurements:
         # >> Store MeasureTool output in this workspace <<

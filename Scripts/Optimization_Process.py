@@ -1,7 +1,7 @@
 from pathlib import Path
 from collections import OrderedDict
 from datetime import datetime
-import sys, copy, json, numpy as np, pandas as pd 
+import time, sys, copy, json, numpy as np, pandas as pd, progress
 
 base_path = Path(__file__).parent.parent
 script_path = base_path / "Scripts"
@@ -80,7 +80,7 @@ REAL_DURATION = 15.0 # In Seconds
 DELAY = 600 # In Time Steps (~120 steps per second)
 if (DELAY / 120.0) > REAL_DURATION:
     raise ValueError("Delay too large relative to the simulation duration")
-
+RUN_TIME = []
 BATCH_NO = 0 # Real data batch index to compare simulated data to
 case = CaseInfo()
 
