@@ -99,9 +99,9 @@ def update_case_file(tree, case_def, case_name, verbose=True):
 # >> Run Simulation (slow) <<
 def run_simulation(case_def, case_name, os="win64", timestamp=DEFAULT_TIMESTAMP, copy_measurements=True, verbose=True):
     batch_path = str(case_def.parent / (case_name + f"_{os}_GPU" + (".bat" if os == "win64" else ".sh")))
+    start_time = datetime.now()
     if verbose:
-        print(f"Running Batch script: {batch_path}")
-        start_time = datetime.now()
+        print(f"Running Batch script: {batch_path}")  
     p = Popen(("" if  os=="win64" else "sudo ") + batch_path, shell=False if os=="win64" else True, 
                 stdin=PIPE,
                 stdout=DEVNULL, # Don't print output of Script
@@ -109,14 +109,16 @@ def run_simulation(case_def, case_name, os="win64", timestamp=DEFAULT_TIMESTAMP,
     if Path(case_def.parent / f"{case_name}_out").exists():
         stdout, stderr = p.communicate(input=b"1") # Deletes existing '_out'
     # stdout, stderr = p.communicate(input=b"A") # Will print to stdout, input ensures program exits
+    duration = datetime.now()-start_time
     if verbose:
-        print(f"{C.GREEN}{C.BOLD}Simulation Complete{C.END} in {datetime.now()-start_time} (HH:MM:SS)")
+        print(f"{C.GREEN}{C.BOLD}Simulation Complete{C.END} in {duration} (HH:MM:SS)")
 
     if copy_measurements:
         # >> Store MeasureTool output in this workspace <<
         copytree(case_def.parent / (case_name + "_out") / "measurements",
                 Path(__file__).parent / "Measurements" / (case_name + "_" + timestamp))
-
+    return duration
+    
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='>> Manually Swap Simulation Hyperparameters <<')
     parser.add_argument('-d', dest="duration", type=float, nargs='?', default=None, const=True,

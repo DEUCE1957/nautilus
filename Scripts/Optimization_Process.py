@@ -10,6 +10,9 @@ if str(script_path) not in sys.path: sys.path.append(str(script_path))
 if str(submodule_path) not in sys.path: sys.path.append(str(submodule_path))
 
 from bayes_opt import BayesianOptimization, SequentialDomainReductionTransformer
+from bayes_opt.logger import JSONLogger # Log progress
+from bayes_opt.util import load_logs # Allow pause/start
+from bayes_opt.event import Events # Subscription to Optimisation events
 from Measurements_Visualisation import choose_run_and_metric, extract_points, match_real_and_simulated
 from Extract_Simulation_Hyperparameters import *
 from XML_Tools import SimParam, HyperParameters
@@ -51,7 +54,7 @@ def sim_real_difference(file, points, method="mad", delay=0, batch=0):
     return 1.0 / average_distance # Inverted as we want to minimise the objective
 
 def objective(**kwargs):
-    global BATCH_NO, DELAY, REAL_DURATION
+    global BATCH_NO, DELAY, REAL_DURATION, RUN_TIMES
     # >> Convert Kwargs to Simulation Parameters <<
     params = HyperParameters()
     for SimParamStr, value in kwargs.items(): # Kwargs are ORDERED, see PEP 468
@@ -65,7 +68,8 @@ def objective(**kwargs):
 
     timestamp = datetime.now().strftime("%d_%m_%Y_%Hh_%Mm_%Ss")
     # >> Run the simulation (warning: SLOW) <<
-    run_simulation(case.case_def, case.case_name, os="linux64", timestamp=timestamp, copy_measurements=True)
+    duration = run_simulation(case.case_def, case.case_name, os="linux64", timestamp=timestamp, copy_measurements=True, verbose=False)
+    RUN_TIMES.append(duration)
 
     measure_dir = Path(__file__).parent / "Measurements" / (case.case_name + "_" + timestamp)
     file_path = measure_dir / (case.case_path.name + "_Vel.csv")
@@ -76,11 +80,27 @@ def objective(**kwargs):
     BATCH_NO = BATCH_NO + 1
     return target
 
+def select_log(optimizer, log_dir)
+    file_names = {i: f.name for i, f in enumerate(hyperparam_dir.glob("*.json"))}
+    if len(file_names < 1):
+        print("No previous sessions exist")
+        return optimizer
+    print("\n".join([f"{i}: {file_names[i]}" for i in range(len(file_names)) if i in file_names]))
+    while (resp := input("Please select a previous session's log by number")):
+        if resp.isdigit():
+            if int(resp) in file_names:
+                file_name = file_names[int(resp)]
+                break
+    load_logs(optimizer, logs=[str(log_dir / file_name)])
+    print(f"Optimizer is now aware of {len(optimizer.space)} points.")  
+    return optimizer
+
+SESSION_ID = datetime.now().strftime("%d_%m_%Y_%Hh_%Mm_%Ss")
 REAL_DURATION = 15.0 # In Seconds
 DELAY = 600 # In Time Steps (~120 steps per second)
 if (DELAY / 120.0) > REAL_DURATION:
     raise ValueError("Delay too large relative to the simulation duration")
-RUN_TIME = []
+RUN_TIMES = []
 BATCH_NO = 0 # Real data batch index to compare simulated data to
 case = CaseInfo()
 
@@ -97,6 +117,18 @@ optimizer = BayesianOptimization(
     random_state=1,
     bounds_transformer=bounds_transformer,
 )
+
+# >> Logging / Pausing <<
+log_path = script_path / "Logs" / + f"{SESSION_ID}_OPTIMIZATION_LOG.json"
+if not log_path.exists():
+    log_path.mkdir()
+logger = JSONLogger(path=str(log_path))
+optimizer.subscribe(Events.OPTIMIZATION_STEP, logger)
+
+while (resp := input("Load previous session? 'Y' (yes) 'N' (no)")).strip().lower() not in ["y", "n"]:
+    continue
+if resp.strip().lower() == "y":
+    optimizer = select_log(optimizer, log_dir=log_path.parent)
 
 #  Init_points: How many steps of **random** exploration you want to perform.
 #  n_iter: How many steps of bayesian optimization you want to perform.
