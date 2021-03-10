@@ -24,7 +24,7 @@ class CaseInfo():
         self.case_def = case_def
         self.tree = tree
 
-def sim_real_difference(file, points, method="mad"):
+def sim_real_difference(file, points, method="mad", delay=0, batch=0):
     df_simul = pd.read_csv(file, sep=";", index_col=0, header=1)
 
     dfs_real = {}
@@ -36,8 +36,11 @@ def sim_real_difference(file, points, method="mad"):
     running_sum = 0
     for point_no, point in points.items():
         loc = int(point[0]) # Position downstream from Turbine (located at X=4m)
-        simulated_x_velocity = df_simul[f"Vel_{point_no}.x [m/s]"]
-        real_x_velocity = dfs_real[loc]["Velocity"][0:len(simulated_x_velocity)]
+        simulated_x_velocity = df_simul[f"Vel_{point_no}.x [m/s]"][delay:] # Optional delay allows for simulation to stabilise
+        batch_size = len(simulated_x_velocity)
+        # Compare to real data, shifted by batch_number. Delay not needed here. 
+        real_x_velocity = dfs_real[loc]["Velocity"]
+        real_x_velocity = np.roll(real_x_velocity, batch*batch_size)[0: batch_size] # Will eventually wrap around
         if method == "mad": # Mean Absolute Difference
             abs_differences = np.absolute(np.subtract(simulated_x_velocity, real_x_velocity))
             running_sum += np.mean(abs_differences)
@@ -48,6 +51,7 @@ def sim_real_difference(file, points, method="mad"):
     return 1.0 / average_distance # Inverted as we want to minimise the objective
 
 def objective(**kwargs):
+    global BATCH_NO, DELAY, REAL_DURATION
     # >> Convert Kwargs to Simulation Parameters <<
     params = HyperParameters()
     for SimParamStr, value in kwargs.items(): # Kwargs are ORDERED, see PEP 468
@@ -67,10 +71,17 @@ def objective(**kwargs):
     file_path = measure_dir / (case.case_path.name + "_Vel.csv")
 
     points, columns = extract_points(file_path, verbose=False)
-    target = sim_real_difference(file_path, points, method="mse")
+    
+    target = sim_real_difference(file_path, points, method="mse", delay=DELAY, batch=BATCH_NO)
+    BATCH_NO = BATCH_NO + 1
     return target
 
-REAL_DURATION = 10.0 # In Seconds
+REAL_DURATION = 15.0 # In Seconds
+DELAY = 600 # In Time Steps (~120 steps per second)
+if (DELAY / 120.0) > REAL_DURATION:
+    raise ValueError("Delay too large relative to the simulation duration")
+
+BATCH_NO = 0 # Real data batch index to compare simulated data to
 case = CaseInfo()
 
 params, _ = find_simulation_parameters(case.tree, file_name="HyperParameter_Contract.txt",
