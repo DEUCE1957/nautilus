@@ -28,6 +28,12 @@ class CaseInfo():
         self.case_def = case_def
         self.tree = tree
 
+class TerminationObserver:
+    def update(self, event, instance=None):
+        global TERMINATED
+        print(f"{C.BOLD}{C.GREEN}Info{C.END} Termination Event Registered, Stopping Maximisation")
+        TERMINATED = True
+
 def sim_real_difference(file, points, method="mad", delay=0, batch=0):
     df_simul = pd.read_csv(file, sep=";", index_col=0, header=1)
 
@@ -99,6 +105,7 @@ def select_log(optimizer, log_dir):
     return optimizer
 
 OS = "win64"
+TERMINATED = False # Used for error-catching
 SESSION_ID = datetime.now().strftime("%d_%m_%Y_%Hh_%Mm_%Ss")
 REAL_DURATION = 0.1 # In Seconds
 DELAY = 1 # In Time Steps (~120 steps per second)
@@ -127,17 +134,26 @@ log_path = script_path / "Logs" / f"{SESSION_ID}_OPTIMIZATION_LOG.json"
 if not log_path.parent.exists():
     log_path.parent.mkdir()
 logger = JSONLogger(path=str(log_path))
-optimizer.subscribe(Events.OPTIMIZATION_STEP, logger)
+optimizer.subscribe(Events.OPTIMIZATION_STEP, logger) 
+optimizer.subscribe(event=Events.OPTIMIZATION_END, subscriber=TerminationObserver, callback=None)
 
 while (resp := input("Load previous session? 'Y' (yes) 'N' (no)")).strip().lower() not in ["y", "n"]:
     continue
 if resp.strip().lower() == "y":
     optimizer = select_log(optimizer, log_dir=log_path.parent)
 
+
 #  Init_points: How many steps of **random** exploration you want to perform.
 #  n_iter: How many steps of bayesian optimization you want to perform.
-optimizer.maximize(init_points=max(5 - len(optimizer.space), 0), # If previous session already explored space, don't do it again
-            n_iter=15,
+init_points = max(0, 5 - len(optimizer.space)) # If previous session already explored space, don't do it again
+n_iter = 15
+no_error_recovery_attempts = 5
+
+while TERMINATED is False and no_error_recovery_attempts > 0:
+    try:
+        optimizer.maximize(
+            init_points=init_points, 
+            n_iter=n_iter,
             acq='ucb', # UCB: Upper Confidence Bound, EI: Expected Improvement, # POI: Probability of Improvement 
             kappa=2.576, # High: Prefer Exploration, Low: Prefer Exploitation
             kappa_decay=1, # Kappa is multiplied by this every iteration
@@ -146,9 +162,18 @@ optimizer.maximize(init_points=max(5 - len(optimizer.space), 0), # If previous s
             # Parameters for internal Gaussian Process Regressor:
             kernel=Matern(nu=2.5), #  [Default: Mattern 2.5 kernel]. Specific to problem. Recommended not to change.
             alpha=1e-3, # [Default 1e-6] Controls how much noise GP can handle, increase for discrete parameters. 
-            normalize_y=True, # [{]Default: True] Normalise mean 0 variance 1, recommended for unit-normalized priors
+            normalize_y=True, # [Default: True] Normalise mean 0 variance 1, recommended for unit-normalized priors
             n_restarts_optimizer=5, # [Default: 5] Used to optimize kernel hyperparameters!
-)
+        )
+    except:
+        print(f"{C.BOLD}{C.RED}Warning{C.END}: Invalid hyper-parameter combination was suggested, trying again.")
+        n_iter = n_iter if len(optimizer.space) <= init_points else n_iter - (len(optimizer.space) - init_points)
+        # Ensure next suggestion is random, so we don't re-suggest the failing parameter combination
+        init_points = 1 if len(optimizer.space) >= init_points else init_points - len(optimizer.space) 
+        no_error_recovery_attempts -= 1
+
+if no_error_recovery_attempts == 0:
+    print(f"{C.BOLD}{C.RED}ERROR{C.END}: Was unable to recover from errors in Objective")
 
 print(f"{C.BOLD}Run Times (HH:MM:SS){C.END}:\n", "\n".join([f"Iter {i}: {rt}" for i, rt in enumerate(RUN_TIMES)]))
 print(f"{C.BOLD}{C.PURPLE}Max of Optimized Combinations{C.END}:\n{optimizer.max}")
