@@ -63,8 +63,9 @@ def find_simulation_parameters(tree, file_name=None,
     with open(hyperparam_dir / file_name, "r") as f:
         for line in f.readlines():
             param_str, value = line.strip().split("=>")
-           
+            print(param_str)
             param = SimParam.from_slug(param_str) 
+            count = 0
             while params.get(param) is not None: # ToDo: Check if this works
                 count += 1
                 param.count = count
@@ -131,5 +132,4 @@ if __name__ == "__main__":
     swap_params(tree.getroot(), params)
     set_duration_and_freq(tree, duration=args.duration, freq=1.0/120.0)
     update_case_file(tree, case_def, case_name, verbose=True)
-    run_simulation(case_def, case_name, os="linux64", copy_measurements=True)
-
+    # run_simulation(case_def, case_name, os="win64", copy_measurements=True)

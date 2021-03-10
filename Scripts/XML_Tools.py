@@ -1,9 +1,14 @@
-import re,  numpy as np
+import re,  numpy as np, sys
 import numpy, builtins # Needed for SimParam to function
 from xml.etree.ElementTree import ElementTree, XMLParser, TreeBuilder
-from Color import Color as C
 from pathlib import Path
 from collections import OrderedDict
+
+base_path = Path(__file__).parent.parent
+script_path = base_path / "Scripts"
+if str(script_path) not in sys.path: sys.path.append(str(script_path))
+from Color import Color as C
+
 
 class HyperParameters(object):
     """
@@ -100,7 +105,7 @@ class SimParam(object):
         if self.bounds[0] <= self.type(default) <= self.bounds[1]:
             self.default = self.type(default) # Convert to same type as Bounds
         else:
-            raise ValueError(f"Default value ({self.default}) is not within bounds {self.bounds}")
+            raise ValueError(f"Default value ({default}) is not within bounds {self.bounds}")
         self.sec_key = sec_key
 
     def _set_bound(self, bound):
@@ -155,7 +160,7 @@ class SimParam(object):
         param_type = eval(parts[3])
         default = param_type(parts[4])
         sec_key = tuple(parts[5].strip("()").split(",")) if parts[5].split(",") != "(None, None)" else (None, None)
-        bounds = tuple([param_type(elt) for elt in parts[6].strip("()").split(",")]) # Casting ensures type is propagated correctly
+        bounds = tuple([param_type(np.float64(elt)) for elt in parts[6].strip("()").split(",")]) # Casting ensures type is propagated correctly
         return SimParam(id, attr, default, count, bounds, sec_key)
             
 
@@ -165,7 +170,7 @@ def is_number(s):
     except ValueError: return False
 
 
-def print_tree(root, parent_path=".", record=False, depth=0):
+def print_tree(root, parent_path=".", record=False, params=None, depth=0):
     """"Recursively print tree (left to right). 
     record (Bool): Store nodes in 'HyperParameter_Contract.txt' [Default: False]
     depth (int): Tracks level in tree, used for indentation [Default: 0]
@@ -174,10 +179,13 @@ def print_tree(root, parent_path=".", record=False, depth=0):
     if depth == 0: # Is Root
         print(f">> {C.BOLD}{C.RED}{root.tag}{C.END} <<")
         print(depth * "    " + f"{', '.join([f'{C.BOLD}{str(k).capitalize()}{C.END}: {v}' for k,v in root.attrib.items()])}")
-
-    params = HyperParameters()
+        if record: # Initialise file
+            with open(Path(__file__).parent / "HyperParameters" / "HyperParameter_Contract.txt", "w"):
+                pass
+    if params is None:
+        params = HyperParameters()
     skip = True
-    written = False
+
     for child in root: 
         # Print Child Tag in DarkCyan if LeafNode and Purple if internal node
         print("    "*(depth+1) + f"{C.BOLD}{C.PURPLE if len(child) else C.DARKCYAN}{child.tag}{C.END} :: ", end="")
@@ -202,13 +210,12 @@ def print_tree(root, parent_path=".", record=False, depth=0):
                         count += 1
                         param.count = count
                     params[param] = param.type(value)
-                    with open(Path(__file__).parent / "HyperParameters" / "HyperParameter_Contract.txt", "a" if written else "w+") as f:
+                    with open(Path(__file__).parent / "HyperParameters" / "HyperParameter_Contract.txt", "a") as f:
                         f.write(f"{repr(param)}=>{param.type(value)}\n")
-                    written = True    
 
         print("") # Newline for new child node
         print_tree(child, parent_path=f"{parent_path}/{child.tag}",
-                   record=record and skip, depth=depth+1)
+                   record=record and skip, params=params, depth=depth+1)
 
 def search_tree(root, tag, res=[]):
     """Recursively finds all elements in Tree with provided tag.

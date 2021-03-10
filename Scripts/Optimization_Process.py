@@ -74,7 +74,6 @@ def objective(**kwargs):
     set_duration_and_freq(case.tree, duration=REAL_DURATION, freq=1.0/120.0) # Should be fixed
     update_case_file(case.tree, case.case_def, case.case_name, verbose=False)
     
-
     timestamp = datetime.now().strftime("%d_%m_%Y_%Hh_%Mm_%Ss")
     # >> Run the simulation (warning: SLOW) <<
     duration = run_simulation(case.case_def, case.case_name, os=OS, timestamp=timestamp, copy_measurements=True, verbose=False)
