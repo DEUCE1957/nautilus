@@ -178,6 +178,7 @@ def print_tree(root, parent_path=".", record=False, depth=0):
 
     params = HyperParameters()
     skip = True
+    written = False
     for child in root: 
         # Print Child Tag in DarkCyan if LeafNode and Purple if internal node
         print("    "*(depth+1) + f"{C.BOLD}{C.PURPLE if len(child) else C.DARKCYAN}{child.tag}{C.END} :: ", end="")
@@ -187,7 +188,7 @@ def print_tree(root, parent_path=".", record=False, depth=0):
 
         for i, (attr, value) in enumerate(child.attrib.items()):
             print(f"'{attr}': {value}; ", end="") # Attributes are concatenated to previous string 
-            written = False
+            
             if record and skip and is_number(value):
                 if child.get("comment") and i == 0: print(child.get("comment"))
                 if (resp := input("Keep this key?")) == "":
@@ -202,9 +203,9 @@ def print_tree(root, parent_path=".", record=False, depth=0):
                         count += 1
                         param.count = count
                     params[param] = param.type(value)
-
-                    with open(Path(__file__).parent / "Hyperparameters" / "HyperParameter_Contract.txt", "a+" if written else "w") as f:
+                    with open(Path(__file__).parent / "HyperParameters" / "HyperParameter_Contract.txt", "a" if written else "w+") as f:
                         f.write(f"{repr(param)}=>{param.type(value)}\n")
+                    written = True    
 
         print("") # Newline for new child node
         print_tree(child, parent_path=f"{parent_path}/{child.tag}",

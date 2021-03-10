@@ -55,8 +55,9 @@ def objective(**kwargs):
         params[param] = str(value) # String ensures it is serialisable
 
     swap_params(case.tree.getroot(), params)
-    set_duration_and_freq(case.tree, duration=DURATION, freq=1.0/120.0) # Should be fixed
+    set_duration_and_freq(case.tree, duration=REAL_DURATION, freq=1.0/120.0) # Should be fixed
     update_case_file(case.tree, case.case_def, case.case_name, verbose=False)
+    
 
     timestamp = datetime.now().strftime("%d_%m_%Y_%Hh_%Mm_%Ss")
     # >> Run the simulation (warning: SLOW) <<
@@ -69,11 +70,11 @@ def objective(**kwargs):
     target = sim_real_difference(file_path, points, method="mse")
     return target
 
-DURATION = 0.1 # In Seconds
+REAL_DURATION = 10.0 # In Seconds
 case = CaseInfo()
 
-params, _ = find_simulation_parameters(case.tree, file_name="HyperParameter_Contract-VelocityOnly.txt",
-                                                  swap=True, record=False, verbose=False)
+params, _ = find_simulation_parameters(case.tree, file_name="HyperParameter_Contract.txt",
+                                                  swap=False, record=False, verbose=False)
 
 # Use panning and zooming on initial bounds to encourage faster convergence
 bounds_transformer = SequentialDomainReductionTransformer()
@@ -89,7 +90,7 @@ optimizer = BayesianOptimization(
 #  Init_points: How many steps of **random** exploration you want to perform.
 #  n_iter: How many steps of bayesian optimization you want to perform.
 optimizer.maximize(init_points=5,
-                 n_iter=25,
+                 n_iter=15,
                  acq='ucb', # UCB: Upper Confidence Bound, EI: Expected Improvement, # POI: Probability of Improvement 
                  kappa=2.576, # Higher: Favours least explored spaces
                  kappa_decay=1, # Kappa is multiplied by this every iteration
@@ -98,3 +99,5 @@ optimizer.maximize(init_points=5,
                  )
 
 print(optimizer.max)
+with open("Optimisation_Results.txt", "w+") as f:
+    f.write(str(optimizer.max))

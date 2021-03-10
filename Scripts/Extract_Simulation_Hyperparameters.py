@@ -2,9 +2,9 @@ import sys, re, numpy as np, argparse
 from xml.etree.ElementTree import ElementTree, XMLParser, TreeBuilder
 from collections import OrderedDict
 from pathlib import Path
-from shutil import copyfile, copytree
+from shutil import copyfile, copytree, rmtree
 from Color import Color as C
-from subprocess import Popen
+from subprocess import Popen, PIPE
 from datetime import datetime
 
 base_path = Path(__file__).parent.parent
@@ -15,7 +15,7 @@ if str(script_path) not in sys.path:
 from XML_Tools import (HyperParameters, SimParam, print_tree, swap_params)
 
 # >> Identify Experiment by Datetime <<
-DEFAULT_TIMESTAMP = datetime.now().strftime("%d_%m_%Y_%Hh_%Mm")
+DEFAULT_TIMESTAMP = datetime.now().strftime("%d_%m_%Y_%Hh_%Mm_%Ss")
 print(f"{C.BLUE}Timestamp{C.END}: {DEFAULT_TIMESTAMP}")
 
 # >> Select Case <<
@@ -100,8 +100,10 @@ def update_case_file(tree, case_def, case_name, verbose=True):
 def run_simulation(case_def, case_name, os="win64", timestamp=DEFAULT_TIMESTAMP, copy_measurements=True):
     batch_path = str(case_def.parent / (case_name + f"_{os}_GPU" + (".bat" if os == "win64" else ".sh")))
     print(f"Running Batch script: {batch_path}")
-    p = Popen(("" if  os=="win64" else "sudo ") + batch_path, shell=False if os=="win64" else True, cwd=str(case_def.parent))
-    stdout, stderr = p.communicate(input=b"\n") # Will print to stdout, input ensures program exits
+    p = Popen(("" if  os=="win64" else "sudo ") + batch_path, shell=False if os=="win64" else True, stdin=PIPE, cwd=str(case_def.parent))
+    if Path(case_def.parent / f"{case_name}_out").exists():
+        stdout, stderr = p.communicate(input=b"1") # Deletes existing '_out'
+    # stdout, stderr = p.communicate(input=b"A") # Will print to stdout, input ensures program exits
     print(f"{C.GREEN}{C.BOLD}Simulation Complete{C.END}")
 
     if copy_measurements:
@@ -118,7 +120,7 @@ if __name__ == "__main__":
     case_path, case_name = select_case()
     case_def, tree = parse_case(case_path)
     params, param_vector = find_simulation_parameters(tree, file_name="HyperParameter_Contract-VelocityOnly.txt",
-                                                      swap=True, record=False, verbose=False)
+                                                      swap=True, record=True, verbose=False)
     swap_params(tree.getroot(), params)
     set_duration_and_freq(tree, duration=args.duration, freq=1.0/120.0)
     update_case_file(tree, case_def, case_name, verbose=True)
