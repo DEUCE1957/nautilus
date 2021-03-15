@@ -58,7 +58,7 @@ def sim_real_difference(file, points, method="mad", delay=0, batch=0):
             square_dist = np.power(np.subtract(simulated_x_velocity, real_x_velocity), 2)
             running_sum += np.mean(square_dist)
     average_distance = running_sum / len(points) # Taking mean of subsets == mean of all data
-    return 1.0 / average_distance # Inverted as we want to minimise the objective
+    return 1.0 / average_distance # Inverted as we want to maximise the objective
 
 def objective(**kwargs):
     global BATCH_NO, DELAY, REAL_DURATION, OS, RUN_TIMES
@@ -106,8 +106,8 @@ def select_log(optimizer, log_dir):
 OS = "win64"
 TERMINATED = False # Used for error-catching
 SESSION_ID = datetime.now().strftime("%d_%m_%Y_%Hh_%Mm_%Ss")
-REAL_DURATION = 0.1 # In Seconds
-DELAY = 1 # In Time Steps (~120 steps per second)
+REAL_DURATION = 15.0 # In Seconds
+DELAY = 600 # In Time Steps (~120 steps per second)
 if (DELAY / 120.0) > REAL_DURATION:
     raise ValueError("Delay too large relative to the simulation duration")
 RUN_TIMES = []
