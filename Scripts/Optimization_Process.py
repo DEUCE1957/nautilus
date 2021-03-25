@@ -1,7 +1,7 @@
 from pathlib import Path
 from collections import OrderedDict
 from datetime import datetime
-import time, sys, copy, json, numpy as np, pandas as pd, progress
+import time, sys, copy, json, numpy as np, pandas as pd
 
 base_path = Path(__file__).parent.parent
 script_path = base_path / "Scripts"
@@ -103,7 +103,7 @@ def select_log(optimizer, log_dir):
     print(f"{C.CYAN}{C.BOLD}INFO{C.END}: Optimizer is now aware of {len(optimizer.space)} points.")  
     return optimizer
 
-OS = "win64"
+OS = "linux64"
 TERMINATED = False # Used for error-catching
 SESSION_ID = datetime.now().strftime("%d_%m_%Y_%Hh_%Mm_%Ss")
 REAL_DURATION = 15.0 # In Seconds
