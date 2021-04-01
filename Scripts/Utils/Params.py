@@ -1,14 +1,7 @@
-import re,  numpy as np, sys
-import numpy, builtins # Needed for SimParam to function
-from xml.etree.ElementTree import ElementTree, XMLParser, TreeBuilder
-from pathlib import Path
+from .Enum import Color as C
+
+import numpy as np, numpy
 from collections import OrderedDict
-
-base_path = Path(__file__).parent.parent
-script_path = base_path / "Scripts"
-if str(script_path) not in sys.path: sys.path.append(str(script_path))
-from Color import Color as C
-
 
 class HyperParameters(object):
     """
@@ -163,93 +156,3 @@ class SimParam(object):
         bounds = tuple([param_type(np.float64(elt)) for elt in parts[6].strip("()").split(",")]) # Casting ensures type is propagated correctly
         return SimParam(id, attr, default, count, bounds, sec_key)
             
-
-def is_number(s):
-    """ Returns True if string is a number. """
-    try: float(s); return True
-    except ValueError: return False
-
-
-def print_tree(root, parent_path=".", record=False, params=None, depth=0):
-    """"Recursively print tree (left to right). 
-    record (Bool): Store nodes in 'HyperParameter_Contract.txt' [Default: False]
-    depth (int): Tracks level in tree, used for indentation [Default: 0]
-    parent_path (str): Tracks paths to nodes, used for direct access. [Default: '.']
-    """
-    if depth == 0: # Is Root
-        print(f">> {C.BOLD}{C.RED}{root.tag}{C.END} <<")
-        print(depth * "    " + f"{', '.join([f'{C.BOLD}{str(k).capitalize()}{C.END}: {v}' for k,v in root.attrib.items()])}")
-        if record: # Initialise file
-            with open(Path(__file__).parent / "HyperParameters" / "HyperParameter_Contract.txt", "w"):
-                pass
-    if params is None:
-        params = HyperParameters()
-    skip = True
-
-    for child in root: 
-        # Print Child Tag in DarkCyan if LeafNode and Purple if internal node
-        print("    "*(depth+1) + f"{C.BOLD}{C.PURPLE if len(child) else C.DARKCYAN}{child.tag}{C.END} :: ", end="")
-        if record:
-            resp = input("\nPress enter to process contract for this tag, any other key to skip.")
-            skip = True if resp == "" else False # Ensures contract is only overwritten if desired. 
-
-        for i, (attr, value) in enumerate(child.attrib.items()):
-            print(f"'{attr}': {value}; ", end="") # Attributes are concatenated to previous string 
-            
-            if record and skip and is_number(value):
-                if child.get("comment") and i == 0: print(child.get("comment"))
-                if (resp := input("Keep this key?")) == "":
-                    xpath = f"{parent_path}/{child.tag}"
-                    # EdgeCase: CaseDef some XML elements are identified best by a Secondary Key
-                    sec_key = (None, None) if child.tag != "parameter" else ('key', child.get('key', 'name'))
-
-                    count = 0
-                    print("")
-                    param = SimParam(xpath, attr=attr, default=value, count=count, bound=None, sec_key=sec_key)
-                    while params.get(param) is not None:
-                        count += 1
-                        param.count = count
-                    params[param] = param.type(value)
-                    with open(Path(__file__).parent / "HyperParameters" / "HyperParameter_Contract.txt", "a") as f:
-                        f.write(f"{repr(param)}=>{param.type(value)}\n")
-
-        print("") # Newline for new child node
-        print_tree(child, parent_path=f"{parent_path}/{child.tag}",
-                   record=record and skip, params=params, depth=depth+1)
-
-def search_tree(root, tag, res=[]):
-    """Recursively finds all elements in Tree with provided tag.
-    root (node): Root of tree, must be iterable and have tag attribute.
-    tag (str): String identifier of node(s) we are searching for
-    res (list): Tracks matching nodes. [Default: []]"""
-    if root.tag == tag:
-        res.append(root)
-    for child in root:
-        new_match = search_tree(child, tag, res=res)
-        if res != new_match:
-            res = new_match
-            break
-    return res
-
-
-def swap_params(root, params):
-    """Swaps list of Simulation parameters in tree, using full XML paths.
-    root (node): Root of tree, must be iterable.
-    params(list): List of SimParam objects
-    """
-    for param, v in params.items():
-        nodes = root.findall(param.id)
-        if nodes == []: raise KeyError(f"XML id: '{param.id}' not found in Tree")
-        if param.sec_key:
-            for node in nodes:
-                if node.get(param.sec_key[0]) == param.sec_key[1]:
-                    break
-        elif len(nodes) >= param.count + 1:
-            node = nodes[param.count]
-        else:
-            raise KeyError(f"Full key: ({param}) is not unique")
-        
-        if node.get(param.attr) is not None:
-            node.set(param.attr, str(v)) # String conversion ensures it is serialisable
-        else:
-            raise KeyError(f"Attribute {param.attr} not in node with id: {param.id}")
