@@ -119,31 +119,31 @@ if resp.strip().lower() == "y":
 #  Init_points: How many steps of **random** exploration you want to perform.
 #  n_iter: How many steps of bayesian optimization you want to perform.
 init_points = max(0, 10 - len(optimizer.space)) # If previous session already explored space, don't do it again
-n_iter = 1
+n_iter = 30
 no_error_recovery_attempts = 5
 
 while TERMINATED is False and no_error_recovery_attempts > 0:
-    # try:
-    optimizer.maximize(
-        init_points=init_points, 
-        n_iter=n_iter,
-        acq='ucb', # UCB: Upper Confidence Bound, EI: Expected Improvement, # POI: Probability of Improvement 
-        kappa=2.576, # High: Prefer Exploration, Low: Prefer Exploitation
-        kappa_decay=1, # Kappa is multiplied by this every iteration
-        kappa_decay_delay=0, # Wait before starting with decay
-        xi=0.0, # Used by EI and POI, 0.1=Exploration, 0.0=Exploitation
-        # Parameters for internal Gaussian Process Regressor:
-        kernel=Matern(nu=2.5), #  [Default: Mattern 2.5 kernel]. Specific to problem. Recommended not to change.
-        alpha=1e-3, # [Default 1e-6] Controls how much noise GP can handle, increase for discrete parameters. 
-        normalize_y=True, # [Default: True] Normalise mean 0 variance 1, recommended for unit-normalized priors
-        n_restarts_optimizer=5, # [Default: 5] Used to optimize kernel hyperparameters!
-    )
-    # except:
-    #     print(f"{C.BOLD}{C.RED}Warning{C.END}: Invalid hyper-parameter combination was suggested, trying again.")
-    #     n_iter = n_iter if len(optimizer.space) <= init_points else n_iter - (len(optimizer.space) - init_points)
-    #     # Ensure next suggestion is random, so we don't re-suggest the failing parameter combination
-    #     init_points = 1 if len(optimizer.space) >= init_points else init_points - len(optimizer.space) 
-    #     no_error_recovery_attempts -= 1
+    try:
+        optimizer.maximize(
+            init_points=init_points, 
+            n_iter=n_iter,
+            acq='ucb', # UCB: Upper Confidence Bound, EI: Expected Improvement, # POI: Probability of Improvement 
+            kappa=2.576, # High: Prefer Exploration, Low: Prefer Exploitation
+            kappa_decay=1, # Kappa is multiplied by this every iteration
+            kappa_decay_delay=0, # Wait before starting with decay
+            xi=0.0, # Used by EI and POI, 0.1=Exploration, 0.0=Exploitation
+            # Parameters for internal Gaussian Process Regressor:
+            kernel=Matern(nu=2.5), #  [Default: Mattern 2.5 kernel]. Specific to problem. Recommended not to change.
+            alpha=1e-3, # [Default 1e-6] Controls how much noise GP can handle, increase for discrete parameters. 
+            normalize_y=True, # [Default: True] Normalise mean 0 variance 1, recommended for unit-normalized priors
+            n_restarts_optimizer=5, # [Default: 5] Used to optimize kernel hyperparameters!
+        )
+    except:
+        print(f"{C.BOLD}{C.RED}Warning{C.END}: Invalid hyper-parameter combination was suggested, trying again.")
+        n_iter = n_iter if len(optimizer.space) <= init_points else n_iter - (len(optimizer.space) - init_points)
+        # Ensure next suggestion is random, so we don't re-suggest the failing parameter combination
+        init_points = 1 if len(optimizer.space) >= init_points else init_points - len(optimizer.space) 
+        no_error_recovery_attempts -= 1
 
 if no_error_recovery_attempts == 0:
     print(f"{C.BOLD}{C.RED}ERROR{C.END}: Was unable to recover from errors in Objective")
