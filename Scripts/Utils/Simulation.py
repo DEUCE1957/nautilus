@@ -1,7 +1,8 @@
 from datetime import datetime
 from pathlib import Path
-import psutil as ps, time
-import GPUtil as gp
+import psutil as ps, GPUtil as gp, time, numpy as np
+from scipy.stats import mode
+import multiprocessing
 from subprocess import PIPE, DEVNULL, Popen, TimeoutExpired
 from shutil import copytree
 from .Enum import Color as C, CommonDirs
@@ -47,7 +48,55 @@ def format_bytes(bytes, unit, SI=False):
     value = bytes / divisor
     if value != 1 and len(unitN) > 3:
             unitN += "s" # Create plural unit of measure
-    return "{:,.0f}".format(value)# + " " + unitN
+    return f"{value:.0f}"
+
+def monitor_process(os, identifier, batch):
+    while (dualSPH := get_dualsph_proc(os)) is None: 
+        time.sleep(1)
+    dualSPH.cpu_percent()  # Reference for future CPU measurements   
+    res_path = CommonDirs.LOGS / f"{identifier.split('-')[1]}-{identifier.split('-')[0]}-RESOURCE_LOG.csv"
+    try:
+        while dualSPH.is_running():
+            if dualSPH.status() == ps.STATUS_ZOMBIE:
+                print(f"{C.YELLOW}{C.BOLD}WARNING{C.END}::MainProcess or DualSPHProcess Status = Zombie")
+                break
+            time.sleep(10)
+            cpu_info = get_cpu_stats(dualSPH)
+            gpu_info = []
+            for GPU in gp.getGPUs():
+                gpu_info.append([GPU.load * 100.0, GPU.memoryUtil * 100.0, GPU.memoryUsed, GPU.memoryTotal, GPU.temperature])
+            
+            with open(res_path, "a+") as f:
+                if res_path.stat().st_size == 0: # True if empty
+                    f.write("Batch Number,RAM Usage(MB),Virtual Memory(MB),CPU (%),CPU (FLOPS)," +
+                            "CPU Freq (Hz),CPU User Time (s),CPU System Time (s),No. Threads," + 
+                            ",".join([f"GPU_{i} (%),GPU_{i} Memory (%),GPU_{i} Memory Used (MB)," + 
+                                       f"GPU_{i} Memory Total (MB),GPU_{i} Temp (C)" for i in range(len(gpu_info))]) + 
+                            "\n") # Header
+                f.write(f"{batch}," + ",".join([f"{elt}" for elt in cpu_info]) + "," +
+                        ",".join([",".join([f"{elt}" for elt in info]) for info in gpu_info]) + "\n")
+    except ps.NoSuchProcess:
+        print(f"{C.YELLOW}{C.BOLD}WARNING{C.END}::MainProcess or DualSPHProcess Stopped Running")    
+
+def get_dualsph_proc(os):
+    name = "DualSPHysics"
+    for p in ps.process_iter(["name", "exe", "cmdline"]):
+        if name in p.info["name"] or \
+           (p.info["exe"] and name in Path(p.info["exe"]).name) or \
+           (p.info["cmdline"] and name in p.info["cmdline"][0]):
+            return p
+    return None
+
+def get_cpu_stats(p):
+    with p.oneshot():
+        cpu_mem = p.memory_info()
+        cpu_threads = p.num_threads()
+        cpu_usage = p.cpu_percent() / float(cpu_threads)
+        cpu_freq = ps.cpu_freq().current * 10**6 # Hz
+        cpu_flops = (cpu_usage / 100.0) * cpu_freq # Hz
+        cpu_times = p.cpu_times()
+    return [format_bytes(cpu_mem.rss, "MB"), format_bytes(cpu_mem.vms, "MB"), cpu_usage, cpu_flops,
+            cpu_freq, cpu_times.user, cpu_times.system, cpu_threads]         
 
 def run_simulation(case_def, case_name, identifier="Default", os="win64", 
                    export_vtk=False, batch=0, 
@@ -57,50 +106,22 @@ def run_simulation(case_def, case_name, identifier="Default", os="win64",
     start_time = datetime.now()
     if verbose:
         print(f"Running Batch script: {batch_path}")  
-    MainProcess = ps.Popen([("" if  os=="win64" else "sudo ") + batch_path, "1" if export_vtk else "0"], shell=False if os=="win64" else True, 
+    MainProcess = ps.Popen([("" if os=="win64" else "sudo ") + batch_path, "1" if export_vtk else "0"], shell=False if os=="win64" else True, 
                 stdin=PIPE,
                 stdout=DEVNULL, # Don't print output of Script
                 cwd=str(case_def.parent))
     if Path(case_def.parent / f"{case_name}_out").exists():
         try:
-            stdout, stderr = MainProcess.communicate(input=b"1", timeout=1) # Deletes existing '_out'
+            time.sleep(1)
+            MainProcess.stdin.write(b"1")
         except TimeoutExpired:
             pass
+    monitor = multiprocessing.Process(name="ResourceMonitor", target=monitor_process,
+                                      args=(os, identifier, batch))
+    monitor.start()                                  
 
-    dualSPH = None
-    for proc in ps.process_iter():
-        if proc.name() == "DualSPHysics5.0_win64.exe" if os=="win64" else "DualSPHysics5.0_linux64":
-            dualSPH = proc
-            dualSPH.cpu_percent() # First call will return 0.0
-
-    res_path = CommonDirs.LOGS / f"{identifier.split('-')[1]}-{identifier.split('-')[0]}-RESOURCE_LOG.csv"
-    try:
-        while MainProcess.is_running() and dualSPH.is_running():
-            time.sleep(10)
-            with dualSPH.oneshot():
-                cpu_mem = dualSPH.memory_info()
-                cpu_usage = dualSPH.cpu_percent() / ps.cpu_count()
-                cpu_freq = ps.cpu_freq().current * 10**6 # Hz
-                cpu_flops = (cpu_usage / 100.0) * cpu_freq
-                cpu_times = dualSPH.cpu_times()
-                cpu_threads = dualSPH.num_threads()
-                gpu_info = []
-                for GPU in gp.getGPUs():
-                    gpu_info.append([GPU.load * 100.0, GPU.memoryUtil * 100.0, GPU.memoryUsed, GPU.memoryTotal, GPU.temperature])
-            
-            with open(res_path, "a+") as f:
-                if res_path.stat().st_size == 0: # True if empty
-                    f.write("Batch Number, RAM Usage(MB), Virtual Memory(MB), CPU (%), CPU (FLOPS), " +
-                            "CPU Freq (Hz), CPU User Time (s), CPU System Time (s), No. Threads, " + 
-                            ", ".join([f"GPU_{i} (%), GPU_{i} Memory (%), GPU_{i} Memory Used (MB), " + 
-                                       f"GPU_{i} Memory Total (MB), GPU_{i} Temp (C)" for i in range(len(gpu_info))]) + 
-                            "\n") # Header
-                f.write(f"{batch}, {format_bytes(cpu_mem.rss, 'MB')}, {format_bytes(cpu_mem.vms, 'MB')}, " +
-                        f"{cpu_usage}, {cpu_flops}, {cpu_freq}, {cpu_times.user}, {cpu_times.system}, {cpu_threads}, " +
-                        ", ".join([", ".join([f"{elt}" for elt in info]) for info in gpu_info]) + "\n")
-    except ps.NoSuchProcess:
-        print(f"{C.YELLOW}{C.BOLD}WARNING{C.END}::MainProcess or DualSPHProcess Stopped Running")
-    # stdout, stderr = p.communicate(input=b"A") # Will print to stdout, input ensures program exits
+    stdout, stderr = MainProcess.communicate(input=b"A") # Will print to stdout, input ensures program exits
+    monitor.terminate()
     duration = datetime.now()-start_time
     if verbose:
         print(f"{C.GREEN}{C.BOLD}Simulation Complete{C.END} in {duration} (HH:MM:SS)")

@@ -10,7 +10,7 @@ from pathlib import Path
 # >> Parse Case (Def)inition XML Tree <<<
 def parse_case(case_path, verbose=False):
     """Parse Case (Def)inition XML file as an Element Tree"""
-    case_defs = [f for f in case_path.glob("*.xml") if case_path.name in f.name]
+    case_defs = [f for f in case_path.glob("*.xml") if case_path.name in f.name and "backup" not in f.name]
     case_def = case_defs[0]
     if len(case_defs) > 1:
         print(f"{C.YELLOW}{C.BOLD}WARNING{C.END}::Multiple case def files found at {case_path}, defaulting to first.")

@@ -25,7 +25,7 @@ OS = "win64" if os.name == "nt" else "linux64"
 TERMINATED = False # Used for error-catching
 COLUMNS = None
 SESSION_ID = datetime.now().strftime("%d_%m_%Y_%Hh_%Mm_%Ss")
-REAL_DURATION = 0.1 # In Seconds
+REAL_DURATION = 0.3 # In Seconds
 DELAY = 0 # In Time Steps (~120 steps per second)
 if (DELAY / 120.0) > REAL_DURATION:
     raise ValueError("Delay too large relative to the simulation duration")
@@ -63,7 +63,7 @@ def objective(**kwargs):
     params = HyperParameters()
     for SimParamStr, value in kwargs.items(): # Kwargs are ORDERED, see PEP 468
         param = SimParam.from_slug(SimParamStr)
-        if param.type in [np.float, np.float16, np.float32, np.float64, np.double, np.longdouble]: # Continuous
+        if param.type in [float, np.float16, np.float32, np.float64, np.double, np.longdouble]: # Continuous
             params[param] = str(value) # String ensures it is serialisable
         else:
             params[param] = str(param.type(value)) # Cast to discrete parameter
@@ -118,8 +118,8 @@ if resp.strip().lower() == "y":
 
 #  Init_points: How many steps of **random** exploration you want to perform.
 #  n_iter: How many steps of bayesian optimization you want to perform.
-init_points = max(0, 10 - len(optimizer.space)) # If previous session already explored space, don't do it again
-n_iter = 30
+init_points = max(0, 5 - len(optimizer.space)) # If previous session already explored space, don't do it again
+n_iter = 10
 no_error_recovery_attempts = 5
 
 while TERMINATED is False and no_error_recovery_attempts > 0:
@@ -139,11 +139,11 @@ while TERMINATED is False and no_error_recovery_attempts > 0:
             n_restarts_optimizer=5, # [Default: 5] Used to optimize kernel hyperparameters!
         )
     except:
-        print(f"{C.BOLD}{C.RED}Warning{C.END}: Invalid hyper-parameter combination was suggested, trying again.")
-        n_iter = n_iter if len(optimizer.space) <= init_points else n_iter - (len(optimizer.space) - init_points)
-        # Ensure next suggestion is random, so we don't re-suggest the failing parameter combination
-        init_points = 1 if len(optimizer.space) >= init_points else init_points - len(optimizer.space) 
-        no_error_recovery_attempts -= 1
+       print(f"{C.BOLD}{C.RED}Warning{C.END}: Invalid hyper-parameter combination was suggested, trying again.")
+       n_iter = n_iter if len(optimizer.space) <= init_points else n_iter - (len(optimizer.space) - init_points)
+       # Ensure next suggestion is random, so we don't re-suggest the failing parameter combination
+       init_points = 1 if len(optimizer.space) >= init_points else init_points - len(optimizer.space) 
+       no_error_recovery_attempts -= 1
 
 if no_error_recovery_attempts == 0:
     print(f"{C.BOLD}{C.RED}ERROR{C.END}: Was unable to recover from errors in Objective")
