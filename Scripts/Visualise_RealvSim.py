@@ -15,7 +15,11 @@ if __name__ == "__main__":
     measure_dir, file = choose_run_and_metric()
     measures = {f: batch_no for batch_no, f in enumerate(measure_dir.glob("*.csv"))}
     points, columns = extract_points(file, verbose=False)
+    delay=int(input("Delay in time steps"))
     df = sim_real_difference(file, points, method=None,
-                             delay=int(input("Delay in time steps")),
+                             delay=delay,
                              batch=measures[file])
     plot_measurement_by_loc(df, points)
+    print(sim_real_difference(file, points, method="mad",
+                             delay=delay,
+                             batch=measures[file]))

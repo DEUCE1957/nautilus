@@ -62,7 +62,8 @@ def sim_real_difference(file, points, method=None, delay=0, batch=0):
         return 1.0 / average_distance # Inverted as we want to maximise the objective
 
 def plot_measurement_by_loc(df, points, batch=0, save_path=None, show=True):
-    fig, axes = plt.subplots(nrows=math.ceil(len(points)/2), ncols=2, figsize=(16, math.ceil(len(points)/2)*9))
+    fig, axes = plt.subplots(nrows=math.ceil(len(points)/2), ncols=2, sharey=True,
+                            figsize=(16, math.ceil(len(points)/2)*9))
     for point_no in range(len(points)):
         point = points[point_no]
         ax = axes[(math.floor(point_no/2), point_no % 2) if len(points) > 2 else point_no]
@@ -73,7 +74,8 @@ def plot_measurement_by_loc(df, points, batch=0, save_path=None, show=True):
         loc = int(points[point_no][0]-4)
         ax.plot(subset.Time, subset.Vel_X_Real, color="red", label="Objective") # The Objective Function! 
         ax.set(title=f"Measurement at X: {points[point_no][0]}m, Y: {points[point_no][1]}m, Z: {points[point_no][2]}m",
-               xlabel="Time (s)", ylabel="Velocity_X (m/s)")
+               xlabel="Time (s)", ylabel="Velocity_X (m/s)" if point_no % 2 == 0 else None,
+               xlim=(min(subset.Time),max(subset.Time)))
         ax.legend()
     plt.tight_layout(h_pad=24.0)
     if save_path is not None:

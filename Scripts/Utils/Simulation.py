@@ -108,19 +108,22 @@ def run_simulation(case_def, case_name, identifier="Default", os="win64",
         print(f"Running Batch script: {batch_path}")  
     MainProcess = ps.Popen([("" if os=="win64" else "sudo ") + batch_path, "1" if export_vtk else "0"], shell=False if os=="win64" else True, 
                 stdin=PIPE,
-                stdout=DEVNULL, # Don't print output of Script
+                # stdout=DEVNULL, # Don't print output of Script
                 cwd=str(case_def.parent))
     if Path(case_def.parent / f"{case_name}_out").exists():
         try:
-            time.sleep(1)
-            MainProcess.stdin.write(b"1")
+            time.sleep(5)
+            if os == "win64":
+                stdout, stderr = MainProcess.communicate(input=b"1")
+            else:
+                MainProcess.stdin.write(b"1")
         except TimeoutExpired:
             pass
     monitor = multiprocessing.Process(name="ResourceMonitor", target=monitor_process,
                                       args=(os, identifier, batch))
     monitor.start()                                  
-
-    stdout, stderr = MainProcess.communicate(input=b"A") # Will print to stdout, input ensures program exits
+    if os != "win64":
+        stdout, stderr = MainProcess.communicate(input=b"A") # Will print to stdout, input ensures program exits
     monitor.terminate()
     duration = datetime.now()-start_time
     if verbose:
